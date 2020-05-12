@@ -1,0 +1,1033 @@
+---
+title: "corona"
+#output: html_document
+
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: scroll
+    source_code: embed
+
+---
+
+```{r setup, include=FALSE}
+library(plyr)
+library(flexdashboard)
+library(tidyverse)
+library(scales)
+library(lubridate)
+library(gridExtra)
+library(openintro)
+library(rvest)
+library(jsonlite)
+```
+
+```{r, include=FALSE}
+knitr::opts_chunk$set(fig.width=12, fig.height=8) 
+```
+
+
+```{r, include=FALSE}
+###############################################################
+###############################################################
+# Definition and Scripts 
+
+# Turn off scientific notation
+options(scipen=999)
+
+# Define colors
+cb.blue <- "#0072B2"
+cb.orange <- "#E69F00"
+cb.purple <- "#CC79A7"
+cb.red <- "#D55E00"
+cb.black <- "#000000"
+
+cb.six <- c("#000000",  
+            cb.blue, 
+            cb.orange, cb.purple,
+            "#56B4E9", "#009E73" )
+cb.seven <- c("#009E73", cb.blue, "#000000",
+              "#999999", 
+              cb.orange, cb.purple, cb.red) #"red")
+
+cb.8 <- c("#009E73", cb.blue, "#000000",
+              "#999999", 
+              cb.orange, cb.purple, "red", "maroon")
+
+
+clr.ww.conf = cb.orange
+clr.us.conf = cb.blue
+clr.ww.dead = 'darkred'
+clr.us.dead = cb.purple
+
+###############################################################
+###############################################################
+# hard code in 1 million so I don't fat finger it later
+mill <- 1000000
+
+###############################################################
+###############################################################
+
+# Population Statistics
+michpop <- 10000000
+ohpop <- 11700000
+txpop <- 28700000
+wipop <- 5800000
+capop <- 39600000
+nypop <- 19500000
+wapop <- 7500000
+flpop <- 21500000
+
+## worldwide pop
+italypop <- 61000000
+frpop <- 65000000
+gerpop <- 84000000
+chpop <- 1439000000
+uspop <- 327000000
+skpop <- 51000000
+spainpop <- 47000000
+
+###############################################################
+###############################################################
+
+# American War Deaths
+#  From Wikipedia
+
+civil.war <- 750000
+WW2 <- 405399
+WW1 <- 116516
+nam <- 58209
+korean.war <- 54246
+iraq.war <- 4576
+afg <- 2216
+
+###############################################################
+###############################################################
+
+# Per 1 million population graph
+#     a = df
+#     type = conf, act, death, recovered
+#     region = one of the following:
+#             State for US plot; or Country.Reg for worldwide plot
+#     typex = conft, act, death, recovered
+
+graph.my.data.per1mm <- function(a, type, region, typex) {
+  ggplot(a, aes(x = date, y = type, na.rm = TRUE,
+               color = region,
+               group = region
+    )) +
+    geom_point(size = 3) + 
+    geom_line(size = 2) +
+    scale_colour_manual(values = cb.seven) +
+    scale_x_date(date_labels="%b %d",date_breaks  ="1 week") +
+    scale_y_continuous(labels = comma) +
+    #xlab("Date") +
+    ylab("per 1 Million Population") +
+    theme(panel.grid.minor = element_blank()) +
+    guides(color = guide_legend(title = NULL)) +
+    theme_bw() +
+    theme(legend.text = element_text(size = 14)) +
+    theme(axis.text.x = element_text(size = 13, angle = 35),
+          axis.text.y = element_text(size = 13),
+          axis.title.y = element_text(size = 13)) +
+    labs(title = paste("Per 1 Million Population, COVID-19",
+                  typex,
+                  "Cases")) +
+    theme(plot.title = element_text(size = 16))
+}
+  
+
+###############################################################
+###############################################################  
+               
+# Raw data graph
+#     a = df
+#     type = conf, act, death, recovered
+#     region = one of the following:
+#             State for US plot; or Country.Reg for worldwide plot
+#     typex = conft, act, death, recovered
+
+graph.my.data.raw <- function(a, type, region, typex) {
+  ggplot(a, aes(x = date, y = type, na.rm = TRUE,
+                color = region,
+                group = region
+  )) +
+    geom_point(size = 3) + 
+    geom_line(size = 2) +
+    scale_colour_manual(values = cb.seven) +
+    scale_x_date(date_labels="%b %d",date_breaks  ="1 week") +
+    scale_y_continuous(labels = comma) +
+    xlab("") +
+    ylab("Total") +
+    theme(panel.grid.minor = element_blank()) +
+    guides(color = guide_legend(title = NULL)) +
+    theme_bw() +
+    theme(legend.text = element_text(size = 14)) +
+    theme(axis.text.x = element_text(size = 13, angle = 35),
+          axis.text.y = element_text(size = 13),
+          axis.title.y = element_text(size = 13)) +
+    labs(title = paste("Total Number of COVID-19",
+                       typex,
+                       "Cases")) +
+    theme(plot.title = element_text(size = 16))
+}
+
+
+###############################################################
+###############################################################  
+
+# Raw data graph
+#     a = df
+#     type = conf, act, death, recovered
+#     region = one of the following:
+#             State for US plot; or Country.Reg for worldwide plot
+#     typex = conft, act, death, recovered
+
+graph.bigpic.us.raw <- function(a, type, typex) {
+  a %>% 
+    group_by(date) %>% 
+    summarize(tot.conf = sum(us.conf),
+              tot.deaths = sum(us.death),
+              tot.rec = sum(us.rec),
+              tot.active = sum(us.act)) %>% 
+  ggplot(aes(x = date, y = type, na.rm = TRUE#,
+                #color = region,
+                #group = region
+  )) +
+    geom_point(size = 3) + 
+    geom_line(size = 2) +
+    #scale_colour_manual(values = cb.seven) +
+    scale_x_date(date_labels="%b %d",date_breaks  ="1 week") +
+    scale_y_continuous(labels = comma) +
+    xlab("") +
+    ylab("Total") +
+    theme(panel.grid.minor = element_blank()) +
+    guides(color = guide_legend(title = NULL)) +
+    theme_bw() +
+    theme(legend.text = element_text(size = 14)) +
+    theme(axis.text.x = element_text(size = 13, angle = 35),
+          axis.text.y = element_text(size = 13),
+          axis.title.y = element_text(size = 13)) +
+    labs(title = paste("Total Number of COVID-19",
+                       typex,
+                       "Cases")) +
+    theme(plot.title = element_text(size = 16))
+}
+
+###############################################################
+###############################################################  
+###############################################################
+###############################################################  
+
+# To insert valueBox in Shiny App
+  
+valueBox2 <- function(value, subtitle, icon, color) {
+  div(class = "col-lg-3 col-md-6",
+      div(class = "panel panel-primary",
+          div(class = "panel-heading", style = paste0("background-color:", color),
+              div(class = "row",
+                  div(class = "col-xs-3",
+                      icon(icon, "fa-5x")
+                  ),
+                  div(class = ("col-xs-9 text-center"),
+                      div(style = ("font-size: 40px; font-weight: bold;"),
+                          textOutput(value)
+                      ),
+                      div(subtitle)
+                  )
+              )
+          ),
+          div(class = "panel-footer",
+              div(class = "clearfix")
+          )
+      )
+  )
+}
+
+###############################################################
+###############################################################  
+
+```
+
+```{r, include=FALSE}
+# Prep the Data
+
+#  Get the global Confirmed cases information
+
+fetchAll.conf.glob <- function(page) {
+  url <- 'https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv'
+  url2 <- read_html(url)
+  url3 <- url2 %>%
+    html_nodes("table") %>%
+    .[1] %>%
+    html_table(fill = TRUE)
+  url4 <- data.frame(url3)
+}
+
+glob.conf <- ldply(0:0, fetchAll.conf.glob, .progress = "text")
+
+# copy df
+glob.conf2 <- glob.conf
+
+# change column name to Confirmed
+glob.conf2[,1] <- "confirmed"
+
+
+###########
+#  Get the global Death cases information
+
+fetchAll.death.glob <- function(page) {
+  url <- 'https://github.com/CSSEGISandData/COVID-19/blob/master/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_deaths_global.csv'
+  url2 <- read_html(url)
+  url3 <- url2 %>%
+    html_nodes("table") %>%
+    .[1] %>%
+    html_table(fill = TRUE)
+  url4 <- data.frame(url3)
+}
+
+glob.dead <- ldply(0:0, fetchAll.death.glob, .progress = "text")
+
+# copy df
+glob.dead2 <- glob.dead
+
+# change column name to Dead
+glob.dead2[,1] <- "dead"
+
+# Now merge df
+wwdf <- bind_rows(glob.conf2, glob.dead2)
+
+######
+# change names of cells for future column names
+wwdf[1, "X1"] <- "type"
+wwdf[1, "X2"] <- "state"
+wwdf[1, "X3"] <- "country"
+
+# Get first row to be header row
+names(wwdf) <- wwdf[1,]
+wwdf <- wwdf[-1,]
+
+# make dates their own column
+wwdf <- wwdf %>% 
+  pivot_longer(
+    cols = "1/22/20":dim(wwdf)[2],
+    names_to = "date"
+  ) 
+
+# duplicate df
+wwdf3 <- wwdf
+
+# change format of date to be Date instead of Character
+wwdf3 <- wwdf3 %>% 
+  mutate(date2 = date) %>% 
+  separate(date, c("blah1", "blah2", "blah3"), sep = "([\\/])") %>%  # winner winner
+  mutate(newmonth = blah1) %>% 
+  mutate(newday = blah2) %>% 
+  select(date2, newmonth, newday, blah1, blah2, blah3, everything())
+
+# Convert blah3, newmonth and newday to numeric
+wwdf3$newmonth <- as.numeric(as.character(wwdf3$newmonth))
+wwdf3$newday <- as.numeric(as.character(wwdf3$newday))
+wwdf3$blah3 <- as.numeric(as.character(wwdf3$blah3))
+
+# First get month and day to be two digits each
+#   Then create new date column
+wwdf3 <- wwdf3 %>% 
+  mutate(blah11 = sprintf("%02d", newmonth)) %>% 
+  mutate(blah12 = sprintf("%02d", newday)) %>% 
+  mutate(blah14 = paste("20", blah3, sep = "")) %>% 
+  mutate(newdate99 = paste(blah14,
+                           blah11,
+                           blah12,
+                           sep = "-")) %>% 
+  select(newdate99, blah11, newmonth, blah12, blah14, newday, everything())
+
+# copy the df
+wwdf4 <- wwdf3
+
+# Keep appropriate columns
+wwdf4 <- wwdf4 %>% 
+  mutate(date = newdate99) %>% 
+  select(type, state, country, date, value, Lat, Long)
+
+# Make value column numeric
+wwdf4 <- wwdf4 %>% 
+  mutate(value2 = as.numeric(as.character(value))) %>% 
+  #mutate(dead2 = as.numeric(as.character(dead))) %>% 
+  select(-value)
+
+# Separate "type" column into their own columns based on type
+wwdf4 <- wwdf4 %>% 
+  pivot_wider(
+    names_from = type,
+    values_from = value2
+  ) 
+
+# change format of date to be Date instead of Character
+wwdf4 <- wwdf4 %>% 
+  mutate(newdate = as.Date(date, origin = "1970-01-01")) %>% 
+  mutate(date = newdate) %>% 
+  select(-newdate) 
+
+maxdate <- max(wwdf4$date)
+
+curr.ww.counts <- wwdf4 %>% 
+  filter(date == maxdate) %>% 
+  summarize(tot.conf = sum(confirmed, na.rm = TRUE),
+            tot.dead = sum(dead, na.rm = TRUE))
+
+curr.ww.counts
+curr.ww.death.rate <- round(((curr.ww.counts$tot.dead/curr.ww.counts$tot.conf) * 100), 2)
+curr.ww.death.rate
+
+curr.us.counts <- wwdf4 %>% 
+  filter(date == maxdate,
+         country == "US") %>% 
+  summarize(tot.conf = sum(confirmed, na.rm = TRUE),
+            tot.dead = sum(dead, na.rm = TRUE))
+
+curr.us.counts
+curr.us.death.rate <- round(((curr.us.counts$tot.dead/curr.us.counts$tot.conf) * 100), 2)
+
+#############
+# worldwide data EXCLUDING USA
+ww.not.us <- wwdf4 %>% 
+  filter(country != "US") %>% 
+  dplyr::group_by(date) %>% 
+  summarize(ww.conf = sum(confirmed, na.rm = TRUE),
+           ww.death = sum(dead, na.rm = TRUE)) %>% 
+  mutate(region = "rest.of.world") %>% 
+  gather(type, cases, ww.conf:ww.death) 
+
+# USA only data
+us.only <- wwdf4 %>% 
+  filter(country == "US") %>% 
+  group_by(date) %>% 
+  summarize(usa.conf = sum(confirmed, na.rm = TRUE),
+            usa.death = sum(dead, na.rm = TRUE)) %>% 
+  mutate(region = "USA") %>% 
+  gather(type, cases, usa.conf:usa.death)
+
+# Merge worldwide NOT USA, and USA-only
+mynewdf <- bind_rows(ww.not.us, us.only)
+
+# Overall Confirmed Cases
+overall.confirm.graph <- mynewdf %>% 
+  filter(type == "ww.conf" | type == "usa.conf") %>% 
+  ggplot(aes(x = date, y = cases, na.rm = TRUE,
+             color = region,
+             group = region
+  )) +
+  geom_point(size = 3) + 
+  geom_line(size = 2) +
+  scale_colour_manual(values = c(cb.blue, cb.red)) +
+  scale_x_date(date_labels="%b %d",date_breaks  ="1 week") +
+  scale_y_continuous(labels = comma) +
+  xlab("") +
+  ylab("Total") +
+  theme(panel.grid.minor = element_blank()) +
+  guides(color = guide_legend(title = NULL)) +
+  theme_bw() +
+  theme(legend.text = element_text(size = 14)) +
+  theme(axis.text.x = element_text(size = 12, angle = 35),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 12)) +
+  labs(title = "Worldwide Total Number of COVID-19 Confirmed Cases") +
+  theme(plot.title = element_text(size = 16))
+
+overall.confirm.graph
+
+
+# Death Graph
+overall.death.graph <- mynewdf %>% 
+  filter(type == "ww.death" | type == "usa.death") %>% 
+  ggplot(aes(x = date, y = cases, na.rm = TRUE,
+             color = region,
+             group = region
+  )) +
+  geom_point(size = 3) + 
+  geom_line(size = 2) +
+  scale_colour_manual(values = c(cb.blue, cb.red)) +
+  scale_x_date(date_labels="%b %d",date_breaks  ="1 week") +
+  scale_y_continuous(labels = comma) +
+  xlab("") +
+  ylab("Total") +
+  geom_hline(aes(yintercept = nam), color = cb.black, linetype = "dashed") +
+  geom_text(aes(x=as.Date("2020-02-24"), nam, 
+                label = "U.S. Deaths Vietnam", vjust = -1), size = 4.5,
+            color = cb.black) +
+  geom_hline(aes(yintercept = WW1), color = cb.black, linetype = "dashed") +
+  geom_text(aes(x=as.Date("2020-02-24"), WW1, 
+                label = "U.S. Deaths World War 1", vjust = -1), size = 4.5,
+            color = cb.black) +
+  #geom_hline(aes(yintercept = WW2), color = cb.black, linetype = "dashed") +
+  #geom_text(aes(x=as.Date("2020-02-24"), WW2, 
+  #              label = "U.S. Deaths World War 2", vjust = -1), size = 3,
+  #          color = cb.black) +
+  geom_hline(aes(yintercept = korean.war), color = cb.black, linetype = "dashed") +
+  geom_text(aes(x=as.Date("2020-02-24"), korean.war, 
+                label = "U.S. Deaths Korean War", vjust = 2), size = 4.5,
+            color = cb.black) +
+  geom_hline(aes(yintercept = (iraq.war + afg)), color = cb.black, linetype = "dashed") +
+  geom_text(aes(x=as.Date("2020-02-24"), iraq.war + afg, 
+                label = "U.S. Deaths Iraq and Afghanistan", vjust = -1), size = 4.5,
+            color = cb.black) +
+  theme(panel.grid.minor = element_blank()) +
+  guides(color = guide_legend(title = NULL)) +
+  theme_bw() +
+  theme(legend.text = element_text(size = 14)) +
+  theme(axis.text.x = element_text(size = 12, angle = 35),
+        axis.text.y = element_text(size = 12),
+        axis.title.y = element_text(size = 12)) +
+  labs(title = "Worldwide Total Number of COVID-19 Deaths") +
+  theme(plot.title = element_text(size = 16))
+
+
+overall.death.graph
+
+
+################
+# copy the df
+wwdf5 <- wwdf4
+
+wwdf5 <- wwdf5 %>% 
+  group_by(country, date) %>% 
+  summarize(tot.conf = sum(confirmed, na.rm = TRUE),
+            tot.dead = sum(dead, na.rm = TRUE))
+  
+mycountry <- wwdf5 %>% 
+  filter(country == "Italy" | country ==  "France" | country == "Germany" |
+           country == "China" | country == "US" | country == "Korea, South" |
+           country == "Spain") 
+
+
+# Add population figures, and per capita and per 1mm info, into the data frame
+mycountry <- mycountry %>% 
+  mutate(pop = ifelse(country == "Italy", italypop,
+                      ifelse(country == "France", frpop,
+                             ifelse(country == "Germany", gerpop,
+                                    ifelse(country == "China", chpop,
+                                           ifelse(country == "US", uspop,
+                                                  ifelse(country == "Korea, South", skpop,
+                                                         spainpop))))))) %>% 
+  mutate(ww.per.cap.conf = tot.conf/pop,
+         ww.conf.per1mm = ww.per.cap.conf * mill,
+         ww.per.cap.death = tot.dead/pop,
+         ww.deaths.per1mm = ww.per.cap.death * mill
+         )
+
+#####
+# Confirmed cases, selected countries
+# per million
+graph.conf.ww.mil <- graph.my.data.per1mm(mycountry, 
+                                          mycountry$ww.conf.per1mm, 
+                                          mycountry$country,
+                                          "Confirmed")
+
+graph.conf.ww.mil
+
+# confirmed total ww pop
+graph.conf.ww.raw <- graph.my.data.raw(mycountry, 
+                                       mycountry$tot.conf, 
+                                       mycountry$country,
+                                       "Confirmed")
+
+graph.conf.ww.raw
+
+####
+# Death cases, selected countries
+# per million
+graph.death.ww.mil <- graph.my.data.per1mm(mycountry, 
+                                           mycountry$ww.deaths.per1mm, 
+                                           mycountry$country,
+                                           "Death")
+
+graph.death.ww.mil
+
+# total pop
+graph.death.ww.raw <- graph.my.data.raw(mycountry, 
+                                        mycountry$tot.dead, 
+                                        mycountry$country,
+                                        "Death")
+
+graph.death.ww.raw
+
+# ^^^^^
+# |||||
+# /Selected Countries
+
+
+##############################################
+##############################################
+
+# Data for Individual US States
+# |||||||||||||||||
+# VVVVVVVVVVVVVVVVV
+
+my.result2 <- fromJSON("https://covidtracking.com/api/v1/states/daily.json")
+
+maxdate.us <- max(my.result2$date)
+
+curr.us.counts.2 <- my.result2 %>% 
+  filter(date == maxdate.us) %>% 
+  summarize(tot.conf = sum(positive),
+            tot.deaths = sum(death))
+
+curr.us.counts.2
+
+curr.us.death.rate <- round(((curr.us.counts.2$tot.deaths/curr.us.counts$tot.conf) * 100), 2)
+
+# Get date column to be in date format
+# copy df
+usdf <- my.result2
+
+usdf$date <- usdf$date %>% 
+  lubridate::ymd()
+
+#################
+################
+# US States
+# |||||
+# VVVVV
+
+# Selected states
+mystates <- usdf %>% 
+  filter(state == "MI" | state ==  "OH" | state == "TX" |
+           state == "WI" | state == "CA" | #state == "New York" |
+           state == "WA" | state == "FL") 
+
+# Add population figures, and per capita and per 1mm info, into the data frame
+mystates <- mystates %>% 
+  mutate(pop = ifelse(state == "MI", michpop,
+                      ifelse(state == "OH", ohpop,
+                             ifelse(state == "TX", txpop,
+                                    ifelse(state == "WI", wipop,
+                                           ifelse(state == "CA", capop,
+                                                  ifelse(state == "FL", flpop,
+                                                         #ifelse(state == "New York", nypop,
+                                                         wapop))))))) %>% 
+  mutate(per.cap.conf = positive/pop,
+         conf.per1mm = per.cap.conf * mill,
+         per.cap.death = death/pop,
+         deaths.per1mm = per.cap.death * mill)
+
+#####
+# Confirmed cases, selected US states
+# per million
+graph.conf.us.mil <- graph.my.data.per1mm(mystates, 
+                                          mystates$conf.per1mm, 
+                                          mystates$state,
+                                          "Confirmed")
+
+graph.conf.us.mil
+
+# total pop
+graph.conf.us.raw <- graph.my.data.raw(mystates, 
+                                       mystates$positive, 
+                                       mystates$state,
+                                       "Confirmed")
+
+graph.conf.us.raw
+
+
+#####
+# Deaths cases, selected US states
+graph.death.us.mil <- graph.my.data.per1mm(mystates, 
+                                           mystates$deaths.per1mm, 
+                                           mystates$state,
+                                           "Death")
+
+graph.death.us.mil
+
+# total pop
+graph.death.us.raw <- graph.my.data.raw(mystates, 
+                                        mystates$death, 
+                                        mystates$state,
+                                        "Death")
+
+graph.death.us.raw
+
+
+```
+
+Overview
+==============
+
+Row
+-----------------------
+### Worldwide Confirmed  
+
+```{r , echo = FALSE}
+#```{r vbox_world_confirmed, echo = FALSE}
+ww_confirmed2 <- format(curr.ww.counts$tot.conf, big.mark = ",")
+valueBox(value = ww_confirmed2, icon = 'fa-user-md', color = clr.ww.conf)
+
+```
+
+
+### Worldwide Deaths  
+```{r vbox_world_deaths, echo = FALSE}
+ww_death2 <- format(curr.ww.counts$tot.dead, big.mark = ",")
+ww_pct_death = round((curr.ww.counts$tot.dead / curr.ww.counts$tot.conf) * 100, 1)
+valueBox(paste(ww_death2, 
+         " (", ww_pct_death, "%)"),icon = 'fa-dizzy', color = clr.ww.dead)
+
+```
+
+
+### U.S. Confirmed  
+```{r , echo = FALSE}
+us_confirmed2 <- format(curr.us.counts$tot.conf, big.mark = ",")
+valueBox(us_confirmed2, icon = 'fa-user-md', color = clr.us.conf)
+
+```
+
+
+### U.S. Deaths  
+```{r , echo = FALSE}
+us_death2 <- format(curr.us.counts$tot.dead, big.mark = ",")
+us_pct_death = round((curr.us.counts$tot.dead / curr.us.counts$tot.conf) * 100, 1)
+valueBox(paste(us_death2,
+               " (", us_pct_death, "%)"),icon = 'fa-dizzy', color = clr.us.dead)
+
+```
+
+Row 
+-----------------------
+
+### Worldwide Confirmed Graph  
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+#```{r, fig.width=16}#, fig.height=8}
+print(overall.confirm.graph)
+
+```
+
+Row 
+-----------------------
+
+### Worldwide Deaths Graph  
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+#```{r, fig.width=16, fig.height=8}
+plot(overall.death.graph)
+
+```
+
+
+Worldwide Totals
+==============
+
+Row
+-----------------------
+### Worldwide Confirmed  
+
+
+```{r , echo = FALSE}
+valueBox(ww_confirmed2, icon = 'fa-user-md', color = clr.ww.conf)
+
+```
+
+
+### Worldwide Deaths  
+
+```{r , echo = FALSE}
+#valueBox(curr.ww.counts$tot.deaths, icon = 'fa-dizzy', color = clr.ww.dead)
+valueBox(paste(ww_death2, 
+         " (", ww_pct_death, "%)"),icon = 'fa-dizzy', color = clr.ww.dead)
+
+```
+
+
+### U.S. Confirmed  
+
+```{r , echo = FALSE}
+valueBox(us_confirmed2, icon = 'fa-user-md', color = clr.us.conf)
+
+```
+
+
+### U.S. Deaths    
+```{r , echo = FALSE}
+valueBox(paste(us_death2,
+               " (", us_pct_death, "%)"),icon = 'fa-dizzy', color = clr.us.dead)
+
+
+```
+
+
+
+Row  
+-----------------------  
+
+### Select Countries Confirmed Graph  
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+#graph.conf.ww.raw <- graph.my.data.raw(mycountry, 
+#                                       mycountry$ww.conf, 
+#                                       mycountry$Country.Reg,
+#                                       "Confirmed")
+
+
+plot(graph.conf.ww.raw)
+
+```
+
+
+
+Row  
+-----------------------  
+
+### Select Countries Deaths Graph  
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+#graph.death.ww.raw <- graph.my.data.raw(mycountry, 
+#                                       mycountry$ww.death, 
+#                                       mycountry$Country.Reg,
+#                                       "Death")
+```
+
+```{r, echo = FALSE}
+plot(graph.death.ww.raw)
+```
+
+
+Worldwide Per Million
+==============
+
+Row
+-----------------------
+### Worldwide Confirmed  
+
+
+```{r , echo = FALSE}
+valueBox(ww_confirmed2, icon = 'fa-user-md', color = clr.ww.conf)
+
+```
+
+
+### Worldwide Deaths  
+
+```{r , echo = FALSE}
+valueBox(paste(ww_death2, 
+         " (", ww_pct_death, "%)"),icon = 'fa-dizzy', color = clr.ww.dead)
+
+```
+
+
+### U.S. Confirmed  
+
+```{r , echo = FALSE}
+valueBox(us_confirmed2, icon = 'fa-user-md', color = clr.us.conf)
+
+```
+
+
+### U.S. Deaths    
+```{r , echo = FALSE}
+valueBox(paste(us_death2,
+               " (", us_pct_death, "%)"),icon = 'fa-dizzy', color = clr.us.dead)
+
+
+```
+
+
+
+Row  
+-----------------------  
+
+### Select Countries Confirmed Per 1 Million Population Graph  
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+#graph.conf.ww.mil <- graph.my.data.per1mm(mycountry, 
+#                                          mycountry$ww.conf.per1mm, 
+#                                          mycountry$Country.Reg,
+#                                          "Confirmed")
+
+graph.conf.ww.mil
+
+```
+
+
+
+Row  
+-----------------------  
+
+### Select Countries Deaths Per 1 Million Population Graph  
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+#graph.death.ww.mil <- graph.my.data.per1mm(mycountry, 
+#                                          mycountry$ww.deaths.per1mm, 
+#                                          mycountry$Country.Reg,
+#                                          "Death")
+
+graph.death.ww.mil
+
+```
+
+
+U.S. Totals
+==============
+
+Row
+-----------------------
+### Worldwide Confirmed  
+
+
+```{r , echo = FALSE}
+valueBox(ww_confirmed2, icon = 'fa-user-md', color = clr.ww.conf)
+
+```
+
+
+### Worldwide Deaths  
+
+```{r , echo = FALSE}
+#valueBox(curr.ww.counts$tot.deaths, icon = 'fa-dizzy', color = clr.ww.dead)
+valueBox(paste(ww_death2, 
+         " (", ww_pct_death, "%)"),icon = 'fa-dizzy', color = clr.ww.dead)
+
+```
+
+
+### U.S. Confirmed  
+
+```{r , echo = FALSE}
+valueBox(us_confirmed2, icon = 'fa-user-md', color = clr.us.conf)
+
+```
+
+
+### U.S. Deaths    
+```{r , echo = FALSE}
+valueBox(paste(us_death2,
+               " (", us_pct_death, "%)"),icon = 'fa-dizzy', color = clr.us.dead)
+
+
+```
+
+
+
+Row  
+-----------------------  
+
+### Select U.S. States Confirmed Graph  
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+#graph.conf.us.raw <- graph.my.data.raw(mystates, 
+#                                          mystates$us.conf, 
+#                                          mystates$State,
+#                                          "Confirmed")
+
+plot(graph.conf.us.raw)
+
+```
+
+
+
+Row  
+-----------------------  
+
+### Select U.S. States Deaths Graph  
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+#graph.death.us.raw <- graph.my.data.raw(mystates, 
+#                                       mystates$us.death, 
+#                                       mystates$State,
+#                                       "Death")
+
+plot(graph.death.us.raw)
+```
+
+U.S. Per Million
+==============
+
+Row
+-----------------------
+### Worldwide Confirmed  
+
+
+```{r , echo = FALSE}
+valueBox(ww_confirmed2, icon = 'fa-user-md', color = clr.ww.conf)
+
+```
+
+
+### Worldwide Deaths  
+
+```{r , echo = FALSE}
+#valueBox(curr.ww.counts$tot.deaths, icon = 'fa-dizzy', color = clr.ww.dead)
+valueBox(paste(ww_death2, 
+         " (", ww_pct_death, "%)"),icon = 'fa-dizzy', color = clr.ww.dead)
+
+```
+
+
+### U.S. Confirmed  
+
+```{r , echo = FALSE}
+valueBox(us_confirmed2, icon = 'fa-user-md', color = clr.us.conf)
+
+```
+
+
+### U.S. Deaths    
+```{r , echo = FALSE}
+valueBox(paste(us_death2,
+               " (", us_pct_death, "%)"),icon = 'fa-dizzy', color = clr.us.dead)
+
+
+```
+
+
+
+Row  
+-----------------------  
+
+### Select U.S. States Confirmed Per 1 Million Population Graph  
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+#graph.conf.us.mil <- graph.my.data.per1mm(mystates, 
+#              mystates$conf.per1mm, 
+#              mystates$State,
+#              "Confirmed")
+
+graph.conf.us.mil
+
+```
+
+
+Row  
+-----------------------  
+
+### Select U.S. States Deaths Per 1 Million Population Graph  
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+#graph.death.us.mil <- graph.my.data.per1mm(mystates, 
+#                                      mystates$deaths.per1mm, 
+#                                      mystates$State,
+#                                      "Death")
+
+graph.death.us.mil
+
+```
+
+
+Notes
+==============
+
+Row
+-----------------------
+ Data come from Johns Hopkins (JH):  
+ 
+ 
+   *  Updated daily at approximately 7:59pm eastern time.  
+   
+   *  JH pulls its data from a variety of sources, including but not limited to WHO, China CDC, US CDC, European Centre for Disease Prevention and Control, Government of Canada, etc.  
+   
+   *  Click here [https://github.com/CSSEGISandData/COVID-19] for direct links to data source.  
+   
+   *  Data are not always consistent. There are several instances of flaws in the data. JH has done an excellent job of managing the flaws, but they do continue to exist.  
+   
+   *  I can be reached via twitter @TomAlig333
+

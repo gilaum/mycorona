@@ -1029,5 +1029,7 @@ Row
    
    *  Data are not always consistent. There are several instances of flaws in the data. JH has done an excellent job of managing the flaws, but they do continue to exist.  
    
+   *  Selected U.S. states chosen based on where I have immediate family members living.  
+   
    *  I can be reached via twitter @TomAlig333
 

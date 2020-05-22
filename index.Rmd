@@ -453,11 +453,11 @@ overall.death.graph <- mynewdf %>%
   xlab("") +
   ylab("Total") +
   geom_hline(aes(yintercept = nam), color = cb.black, linetype = "dashed") +
-  geom_text(aes(x=as.Date("2020-02-24"), nam, 
+  geom_text(aes(x=as.Date("2020-03-16"), nam, 
                 label = "U.S. Deaths Vietnam", vjust = -1), size = 4.5,
             color = cb.black) +
   geom_hline(aes(yintercept = WW1), color = cb.black, linetype = "dashed") +
-  geom_text(aes(x=as.Date("2020-02-24"), WW1, 
+  geom_text(aes(x=as.Date("2020-05-04"), WW1, 
                 label = "U.S. Deaths World War 1", vjust = -1), size = 4.5,
             color = cb.black) +
   #geom_hline(aes(yintercept = WW2), color = cb.black, linetype = "dashed") +
@@ -465,11 +465,11 @@ overall.death.graph <- mynewdf %>%
   #              label = "U.S. Deaths World War 2", vjust = -1), size = 3,
   #          color = cb.black) +
   geom_hline(aes(yintercept = korean.war), color = cb.black, linetype = "dashed") +
-  geom_text(aes(x=as.Date("2020-02-24"), korean.war, 
+  geom_text(aes(x=as.Date("2020-03-02"), korean.war, 
                 label = "U.S. Deaths Korean War", vjust = 2), size = 4.5,
             color = cb.black) +
   geom_hline(aes(yintercept = (iraq.war + afg)), color = cb.black, linetype = "dashed") +
-  geom_text(aes(x=as.Date("2020-02-24"), iraq.war + afg, 
+  geom_text(aes(x=as.Date("2020-02-17"), iraq.war + afg, 
                 label = "U.S. Deaths Iraq and Afghanistan", vjust = -1), size = 4.5,
             color = cb.black) +
   theme(panel.grid.minor = element_blank()) +
